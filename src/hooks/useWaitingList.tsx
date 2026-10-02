@@ -64,7 +64,7 @@ export function useAddToWaitingList() {
 export function useUpdateWaitingStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, status, chair, appointment_id }: { id: string; status: string; chair?: string; appointment_id?: string | null }) => {
+    mutationFn: async ({ id, status, chair, appointment_id, patient_id }: { id: string; status: string; chair?: string; appointment_id?: string | null; patient_id?: string | null }) => {
       const updates: any = { status };
       if (status === "called") updates.called_time = new Date().toISOString();
       if (status === "in_progress") updates.seen_time = new Date().toISOString();
@@ -73,6 +73,21 @@ export function useUpdateWaitingStatus() {
       const { error } = await (supabase as any).from("waiting_list").update(updates).eq("id", id);
       if (error) throw error;
 
+      // Walk-ins checked in without a link still sync to today's booking for that patient.
+      if (!appointment_id && patient_id && (status === "in_progress" || status === "completed")) {
+        const { data: entry } = await (supabase as any).from("waiting_list").select("org_id").eq("id", id).maybeSingle();
+        const { data: appt } = await (supabase as any)
+          .from("appointments")
+          .select("id")
+          .eq("org_id", entry?.org_id)
+          .eq("patient_id", patient_id)
+          .eq("appointment_date", new Date().toISOString().split("T")[0])
+          .in("status", ["scheduled", "confirmed", "in-progress"])
+          .order("appointment_time", { ascending: true })
+          .limit(1);
+        appointment_id = appt?.[0]?.id || null;
+        if (appointment_id) await (supabase as any).from("waiting_list").update({ appointment_id }).eq("id", id);
+      }
       // Keep the linked appointment in sync so reception never logs arrival twice
       if (appointment_id) {
         const apptStatus = status === "in_progress" ? "in-progress" : status === "completed" ? "completed" : null;
@@ -84,6 +99,7 @@ export function useUpdateWaitingStatus() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["waiting-list"] });
       qc.invalidateQueries({ queryKey: ["appointments"] });
+      qc.invalidateQueries({ queryKey: ["active-visit-appointment"] });
       toast({ title: "Queue updated" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),

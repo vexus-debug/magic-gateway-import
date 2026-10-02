@@ -85,9 +85,10 @@ export function AppointmentDetailDialog({ appointment, open, onOpenChange, check
 
   const handleStartVisit = async () => {
     if (!appointment) return;
-    await updateAppointment.mutateAsync({ id: appointment.id, status: "in-progress" });
+    await startVisit.mutateAsync({ patient_id: appointment.patient_id, appointment_id: appointment.id });
     onOpenChange(false);
-    navigate(link("consent-forms", appointment.patient_id, { new: "1" }));
+    const tmpl = suggestConsentTemplate(appointment.treatments?.name || appointment.notes || "");
+    navigate(link("consent-forms", appointment.patient_id, { new: "1", ...(tmpl ? { template: tmpl } : {}) }));
   };
 
   const wrapEl = (
