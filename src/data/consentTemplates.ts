@@ -187,3 +187,19 @@ Patient: [PATIENT NAME]   Treatment: [TREATMENT DESCRIPTION]   Estimated total: 
 ${sig}`,
   },
 ];
+
+/** Maps a booked procedure name to the keyword of the consent template that fits it. */
+const consentKeywordRules: { match: RegExp; keyword: string }[] = [
+  { match: /extract|wisdom|surgical|removal/i, keyword: "extraction" },
+  { match: /root canal|endo|rct|pulp/i, keyword: "root canal" },
+  { match: /implant/i, keyword: "implant" },
+  { match: /ortho|brace|aligner/i, keyword: "orthodontic" },
+  { match: /whiten|bleach/i, keyword: "whitening" },
+  { match: /sedation|anaesth|anesth/i, keyword: "anaesthesia" },
+  { match: /payment plan|financ/i, keyword: "financial" },
+];
+
+export function suggestConsentTemplate(procedure: string): string | null {
+  if (!procedure) return null;
+  return consentKeywordRules.find((r) => r.match.test(procedure))?.keyword || null;
+}
