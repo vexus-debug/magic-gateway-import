@@ -1,4 +1,5 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
+import { setActiveVisit, useActiveVisit } from "@/hooks/useActiveVisit";
 import { useParams, useSearchParams } from "react-router-dom";
 
 /**
@@ -7,10 +8,18 @@ import { useParams, useSearchParams } from "react-router-dom";
  */
 export function usePatientContext() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const patientId = searchParams.get("patientId") || "";
+  const active = useActiveVisit();
+  const urlPatientId = searchParams.get("patientId") || "";
+  // URL wins; otherwise fall back to the patient in the chair so context never drops.
+  const patientId = urlPatientId || active?.patientId || "";
+
+  useEffect(() => {
+    if (urlPatientId) setActiveVisit({ patientId: urlPatientId });
+  }, [urlPatientId]);
 
   const setPatientId = useCallback(
     (id: string) => {
+      setActiveVisit(id ? { patientId: id } : null);
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
