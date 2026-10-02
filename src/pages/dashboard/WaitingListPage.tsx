@@ -13,7 +13,8 @@ import { PageHeader } from "@/components/dashboard/PageHeader";
 import { TableSkeleton } from "@/components/dashboard/TableSkeleton";
 import { EmptyState } from "@/components/dashboard/EmptyState";
 import { Plus, Clock, User, ArrowRight, CheckCircle2, Grid3x3, NotebookPen, ClipboardList, Receipt } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useStartVisit } from "@/hooks/useVisitFlow";
 import { useClinicLinks } from "@/hooks/usePatientContext";
 import { useClinicTerms } from "@/hooks/useClinicTerms";
 import { VisitCompletionDialog } from "@/components/dashboard/VisitCompletionDialog";
@@ -37,6 +38,8 @@ export default function WaitingListPage() {
   const [selectedPatient, setSelectedPatient] = useState("");
   const [notes, setNotes] = useState("");
   const link = useClinicLinks();
+  const navigate = useNavigate();
+  const startVisit = useStartVisit();
   const terms = useClinicTerms();
   const [wrapUp, setWrapUp] = useState<{ patientId: string; name: string; treatmentId: string | null; appointmentId: string | null } | null>(null);
 
@@ -61,7 +64,13 @@ export default function WaitingListPage() {
   };
 
   const handleStatusChange = async (entry: any, newStatus: string) => {
-    await updateStatus.mutateAsync({ id: entry.id, status: newStatus, appointment_id: entry.appointment_id });
+    if (newStatus === "in_progress") {
+      // One action: patient into the chair, appointment in progress, visit context set.
+      await startVisit.mutateAsync({ patient_id: entry.patient_id, appointment_id: entry.appointment_id, waiting_id: entry.id });
+      navigate(link("consent-forms", entry.patient_id, { new: "1" }));
+      return;
+    }
+    await updateStatus.mutateAsync({ id: entry.id, status: newStatus, appointment_id: entry.appointment_id, patient_id: entry.patient_id });
     if (newStatus === "completed") openWrapUp(entry);
   };
 

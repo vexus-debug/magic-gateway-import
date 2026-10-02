@@ -10,7 +10,8 @@ import { useUpdateAppointment, type AppointmentRow } from "@/hooks/useAppointmen
 import { useDentists } from "@/hooks/useStaff";
 import { useClinicTerms } from "@/hooks/useClinicTerms";
 import { VisitCompletionDialog } from "@/components/dashboard/VisitCompletionDialog";
-import { useCheckInAppointment } from "@/hooks/useVisitFlow";
+import { useCheckInAppointment, useStartVisit } from "@/hooks/useVisitFlow";
+import { suggestConsentTemplate } from "@/data/consentTemplates";
 import { useClinicLinks } from "@/hooks/usePatientContext";
 import { useNavigate } from "react-router-dom";
 import { UserCheck, Stethoscope } from "lucide-react";
@@ -27,6 +28,7 @@ interface AppointmentDetailDialogProps {
 
 export function AppointmentDetailDialog({ appointment, open, onOpenChange, checkedIn }: AppointmentDetailDialogProps) {
   const checkIn = useCheckInAppointment();
+  const startVisit = useStartVisit();
   const link = useClinicLinks();
   const navigate = useNavigate();
   const [justCheckedIn, setJustCheckedIn] = useState(false);
@@ -85,9 +87,10 @@ export function AppointmentDetailDialog({ appointment, open, onOpenChange, check
 
   const handleStartVisit = async () => {
     if (!appointment) return;
-    await updateAppointment.mutateAsync({ id: appointment.id, status: "in-progress" });
+    await startVisit.mutateAsync({ patient_id: appointment.patient_id, appointment_id: appointment.id });
     onOpenChange(false);
-    navigate(link("consent-forms", appointment.patient_id, { new: "1" }));
+    const tmpl = suggestConsentTemplate(appointment.treatments?.name || appointment.notes || "");
+    navigate(link("consent-forms", appointment.patient_id, { new: "1", ...(tmpl ? { template: tmpl } : {}) }));
   };
 
   const wrapEl = (

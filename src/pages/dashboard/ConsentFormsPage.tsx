@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
-import { usePatientContext } from "@/hooks/usePatientContext";
+import { usePatientContext, useClinicLinks } from "@/hooks/usePatientContext";
+import { Link } from "react-router-dom";
+import { suggestConsentTemplate } from "@/data/consentTemplates";
+import { ArrowRight, Grid3x3, ClipboardList } from "lucide-react";
 import { PatientVisitBar } from "@/components/dashboard/PatientVisitBar";
 import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +20,7 @@ import { useOrg } from "@/hooks/useOrg";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { consentTemplateSeeds } from "@/data/consentTemplates";
+import { useClinicTerms } from "@/hooks/useClinicTerms";
 import { eyeConsentTemplateSeeds } from "@/data/consentTemplatesEye";
 import { getClinicTerms } from "@/config/clinicTerminology";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -225,6 +229,7 @@ export default function ConsentFormsPage() {
       setSignDialogOpen(false);
       setSignerName("");
       setSignature(null);
+      setJustSigned(selectedForm?.patient_id || ctxPatientId || null);
     } catch (err: any) {
       toast({ title: "Could not sign", description: err.message, variant: "destructive" });
     } finally {
@@ -260,6 +265,34 @@ export default function ConsentFormsPage() {
     }
   }, [ctxPatientId]);
   useEffect(() => { if (consumeFlag("new")) setFormDialogOpen(true); }, [consumeFlag]);
+  const clinicLink = useClinicLinks();
+  const clinicTerms = useClinicTerms();
+  const [justSigned, setJustSigned] = useState<string | null>(null);
+
+  // Preselect the consent template matching the procedure the patient is booked for today.
+  useEffect(() => {
+    if (!formDialogOpen || consentForm.templateId || !consentForm.patientId || templates.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      let keyword = searchParams.get("template");
+      if (!keyword) {
+        const { data } = await (supabase as any)
+          .from("appointments")
+          .select("notes, treatments(name)")
+          .eq("org_id", currentOrg?.org_id)
+          .eq("patient_id", consentForm.patientId)
+          .eq("appointment_date", new Date().toISOString().split("T")[0])
+          .neq("status", "cancelled")
+          .limit(1);
+        const a = data?.[0];
+        keyword = suggestConsentTemplate(`${a?.treatments?.name || ""} ${a?.notes || ""}`);
+      }
+      if (cancelled || !keyword) return;
+      const t = templates.find((t: any) => t.is_active && t.title?.toLowerCase().includes(keyword!.toLowerCase()));
+      if (t) setConsentForm((f) => (f.templateId ? f : { ...f, templateId: t.id, title: t.title, content: t.content }));
+    })();
+    return () => { cancelled = true; };
+  }, [formDialogOpen, consentForm.patientId, templates.length]);
 
   const filtered = forms.filter((f: any) => {
     if (ctxPatientId && f.patient_id !== ctxPatientId) return false;
@@ -270,6 +303,23 @@ export default function ConsentFormsPage() {
   return (
     <div className="space-y-6">
       {ctxPatientId && <PatientVisitBar patientId={ctxPatientId} onClear={() => setCtxPatient("")} />}
+      {justSigned && (
+        <Card className="border-secondary/40 bg-secondary/5">
+          <CardContent className="py-3 flex flex-wrap items-center gap-2">
+            <CheckCircle className="h-4 w-4 text-secondary" />
+            <p className="text-sm font-medium mr-auto">Consent signed — continue the visit</p>
+            {clinicTerms.showDentalChart && (
+              <Button asChild size="sm" className="h-8 bg-secondary hover:bg-secondary/90">
+                <Link to={clinicLink("dental-charts", justSigned)}><Grid3x3 className="h-3.5 w-3.5 mr-1" />Proceed to chart<ArrowRight className="h-3.5 w-3.5 ml-1" /></Link>
+              </Button>
+            )}
+            <Button asChild size="sm" variant="outline" className="h-8">
+              <Link to={clinicLink("treatments", justSigned, { tab: "plans" })}><ClipboardList className="h-3.5 w-3.5 mr-1" />Treatment plan</Link>
+            </Button>
+            <Button size="sm" variant="ghost" className="h-8" onClick={() => setJustSigned(null)}>Stay here</Button>
+          </CardContent>
+        </Card>
+      )}
       <PageHeader title="Consent Forms" description="Manage consent form templates and patient consents">
         <div className="flex gap-2 flex-wrap" data-tour="consent-forms-actions">
           <Button type="button" variant="outline" size="sm" onClick={(e) => { e.preventDefault(); setUploadDialogOpen(true); }}>
