@@ -12,6 +12,15 @@ import { CreatePrescriptionDialog } from "@/components/dashboard/CreatePrescript
 import { BookAppointmentDialog } from "@/components/dashboard/BookAppointmentDialog";
 import { printPrescription } from "@/lib/printPrescription";
 import { useOrg } from "@/hooks/useOrg";
+import { completeQueueForPatient } from "@/hooks/useVisitFlow";
+import { setActiveVisit, getActiveVisit } from "@/hooks/useActiveVisit";
+import { useInventory } from "@/hooks/useInventory";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
+import { Package, Trash2 } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -38,9 +47,48 @@ export function VisitCompletionDialog({ open, onOpenChange, patientId, patientNa
   // When opened from the visit bar, find today's in-progress appointment for this patient.
   const { data: activeAppointmentId } = useActiveVisitAppointment(open && !appointmentId ? patientId : null);
 
-  const finishVisit = () => {
+  const qc = useQueryClient();
+  const { data: inventory = [] } = useInventory();
+  const [extras, setExtras] = useState<{ inventory_id: string; qty: number }[]>([]);
+  const [newExtra, setNewExtra] = useState({ inventory_id: "", qty: 1 });
+  const [loggingExtras, setLoggingExtras] = useState(false);
+
+  /** Logs extra consumables used beyond the treatment's standard material list. */
+  const logExtras = async () => {
+    if (!extras.length) return;
+    setLoggingExtras(true);
+    try {
+      for (const e of extras) {
+        const { error } = await (supabase as any).rpc("record_inventory_movement", {
+          p_org_id: currentOrg?.org_id,
+          p_inventory_id: e.inventory_id,
+          p_type: "usage",
+          p_quantity: e.qty,
+          p_reference: "Visit extra",
+          p_notes: `Extra material used for ${patientName || "patient"}`,
+        });
+        if (error) throw error;
+      }
+      toast({ title: "Extra materials logged", description: `${extras.length} item(s) deducted from stock.` });
+      setExtras([]);
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+    } catch (err: any) {
+      toast({ title: "Could not log materials", description: err.message, variant: "destructive" });
+      throw err;
+    } finally {
+      setLoggingExtras(false);
+    }
+  };
+
+  const finishVisit = async () => {
+    try { await logExtras(); } catch { return; }
     const apptId = appointmentId || activeAppointmentId;
     if (apptId) completeAppointment.mutate(apptId);
+    if (patientId) {
+      await completeQueueForPatient(currentOrg?.org_id, patientId);
+      qc.invalidateQueries({ queryKey: ["waiting-list"] });
+      if (getActiveVisit()?.patientId === patientId) setActiveVisit(null);
+    }
     onOpenChange(false);
   };
 
@@ -184,6 +232,41 @@ export function VisitCompletionDialog({ open, onOpenChange, patientId, patientNa
 
             <Separator />
 
+            <section className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Package className="h-3.5 w-3.5" /> Extra materials used
+              </h4>
+              <p className="text-[11px] text-muted-foreground">Standard materials deduct automatically. Add anything extra (graft vial, suture pack…).</p>
+              {extras.map((e, idx) => {
+                const item = inventory.find((i: any) => i.id === e.inventory_id);
+                return (
+                  <div key={idx} className="flex items-center gap-2 rounded-lg bg-muted/30 px-3 py-2 text-sm">
+                    <span className="flex-1 truncate">{item?.name || "Item"}</span>
+                    <span className="text-muted-foreground">× {e.qty}</span>
+                    <Button size="icon" variant="ghost" className="h-6 w-6" aria-label="Remove" onClick={() => setExtras((x) => x.filter((_, i) => i !== idx))}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                );
+              })}
+              <div className="flex items-center gap-2">
+                <Select value={newExtra.inventory_id} onValueChange={(v) => setNewExtra((n) => ({ ...n, inventory_id: v }))}>
+                  <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Pick stock item" /></SelectTrigger>
+                  <SelectContent>
+                    {inventory.map((i: any) => (
+                      <SelectItem key={i.id} value={i.id}>{i.name} ({i.quantity} {i.unit || ""})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input type="number" min={1} className="h-8 w-16 text-xs" value={newExtra.qty} onChange={(e) => setNewExtra((n) => ({ ...n, qty: Math.max(1, Number(e.target.value) || 1) }))} />
+                <Button size="sm" variant="outline" className="h-8" disabled={!newExtra.inventory_id} onClick={() => { setExtras((x) => [...x, newExtra]); setNewExtra({ inventory_id: "", qty: 1 }); }}>
+                  <Plus className="h-3 w-3" />
+                </Button>
+              </div>
+            </section>
+
+            <Separator />
+
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Estimated total</span>
               <span className="text-lg font-bold">{naira(total)}</span>
@@ -196,7 +279,7 @@ export function VisitCompletionDialog({ open, onOpenChange, patientId, patientNa
               <Button variant="outline" onClick={() => setRecallOpen(true)}>
                 <CalendarPlus className="h-4 w-4 mr-2" /> Book next appointment
               </Button>
-              <Button variant="ghost" onClick={finishVisit}>Done for now</Button>
+              <Button variant="ghost" onClick={finishVisit} disabled={loggingExtras}>Done — end visit</Button>
             </div>
           </div>
         </SheetContent>
