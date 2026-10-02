@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { setActiveVisit } from "@/hooks/useActiveVisit";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrg } from "@/hooks/useOrg";
 import { toast } from "@/hooks/use-toast";
@@ -276,4 +277,63 @@ export function useCheckInAppointment() {
     },
     onError: (e: any) => toast({ title: "Check-in failed", description: e.message, variant: "destructive" }),
   });
+}
+
+/**
+ * Starts a clinical visit from anywhere (appointment, queue, profile) and keeps
+ * appointment + waiting-list status in sync so the front desk sees one truth.
+ */
+export function useStartVisit() {
+  const qc = useQueryClient();
+  const { currentOrg } = useOrg();
+  return useMutation({
+    mutationFn: async (input: { patient_id: string; appointment_id?: string | null; waiting_id?: string | null }) => {
+      const db = supabase as any;
+      const orgId = currentOrg?.org_id;
+      let appointmentId = input.appointment_id || null;
+      if (!appointmentId) {
+        const { data } = await db
+          .from("appointments")
+          .select("id")
+          .eq("org_id", orgId)
+          .eq("patient_id", input.patient_id)
+          .eq("appointment_date", today())
+          .in("status", ["scheduled", "confirmed", "in-progress"])
+          .order("appointment_time", { ascending: true })
+          .limit(1);
+        appointmentId = data?.[0]?.id || null;
+      }
+      if (appointmentId) {
+        await db.from("appointments").update({ status: "in-progress" }).eq("id", appointmentId);
+      }
+      // Move any open queue entry for this patient into the chair.
+      const now = new Date().toISOString();
+      let q = db
+        .from("waiting_list")
+        .update({ status: "in_progress", seen_time: now })
+        .eq("org_id", orgId)
+        .in("status", ["waiting", "called"]);
+      q = input.waiting_id ? q.eq("id", input.waiting_id) : q.eq("patient_id", input.patient_id).gte("created_at", `${today()}T00:00:00`);
+      await q;
+      setActiveVisit({ patientId: input.patient_id, appointmentId });
+      return appointmentId;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["appointments"] });
+      qc.invalidateQueries({ queryKey: ["waiting-list"] });
+      qc.invalidateQueries({ queryKey: ["active-visit-appointment"] });
+    },
+    onError: (e: any) => toast({ title: "Could not start visit", description: e.message, variant: "destructive" }),
+  });
+}
+
+/** Marks today's queue entries for a patient as done when the visit finishes. */
+export async function completeQueueForPatient(orgId: string | undefined, patientId: string) {
+  await (supabase as any)
+    .from("waiting_list")
+    .update({ status: "completed", completed_time: new Date().toISOString() })
+    .eq("org_id", orgId)
+    .eq("patient_id", patientId)
+    .neq("status", "completed")
+    .gte("created_at", `${today()}T00:00:00`);
 }

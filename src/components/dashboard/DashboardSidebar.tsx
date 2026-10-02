@@ -20,6 +20,7 @@ import { useUnreadMessageCount, useRealtimeMessages } from "@/hooks/useMessages"
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { usePrefetchPage } from "@/lib/prefetchRoutes";
+import { useActiveVisit, VISIT_PAGES } from "@/hooks/useActiveVisit";
 
 export function DashboardSidebar() {
   const { state, setOpenMobile, isMobile } = useSidebar();
@@ -31,6 +32,7 @@ export function DashboardSidebar() {
   const { data: unreadCount = 0 } = useUnreadCount();
   const { data: unreadMsgCount = 0 } = useUnreadMessageCount();
   const prefetchPage = usePrefetchPage();
+  const activeVisit = useActiveVisit();
   useRealtimeNotifications();
   useRealtimeMessages();
 
@@ -58,7 +60,7 @@ export function DashboardSidebar() {
 
     const content = (
       <NavLink
-        to={fullUrl}
+        to={activeVisit && VISIT_PAGES.includes(String(item.path)) ? `${fullUrl}?patientId=${activeVisit.patientId}` : fullUrl}
         onMouseEnter={() => prefetchPage(String(item.path))}
         onFocus={() => prefetchPage(String(item.path))}
         onTouchStart={() => prefetchPage(String(item.path))}
