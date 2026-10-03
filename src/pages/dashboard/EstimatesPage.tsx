@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { usePatientContext } from "@/hooks/usePatientContext";
+import { PatientVisitBar } from "@/components/dashboard/PatientVisitBar";
+import { usePatientPlanItems } from "@/hooks/useVisitFlow";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +54,37 @@ export default function EstimatesPage() {
     valid_until: format(addDays(new Date(), 30), "yyyy-MM-dd"),
     notes: "",
   });
+  const { patientId: ctxPatientId, consumeFlag } = usePatientContext();
+  const { data: planItems = [], isFetched: planFetched } = usePatientPlanItems(ctxPatientId || null);
+  const [planId, setPlanId] = useState<string | null>(null);
+  const [wantFromPlan] = useState(() => consumeFlag("fromPlan"));
+
+  /** Builds an estimate from the patient's open treatment plan in one click. */
+  const generateFromPlan = () => {
+    const open = planItems.filter((i) => i.status !== "completed");
+    if (!ctxPatientId || open.length === 0) return false;
+    setForm((f) => ({ ...f, patient_id: ctxPatientId, notes: f.notes || `From ${open[0].plan_name}` }));
+    setPlanId(open[0].plan_id);
+    setLineItems(
+      open.map((i) => ({
+        treatment_id: i.treatment_id || "",
+        description: `${i.description}${i.tooth_number ? ` (#${i.tooth_number})` : ""}`,
+        quantity: 1,
+        unit_price: Number(i.estimated_cost || 0),
+        line_total: Number(i.estimated_cost || 0),
+      })),
+    );
+    setCreateOpen(true);
+    return true;
+  };
+  useEffect(() => {
+    if (wantFromPlan && planFetched) generateFromPlan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantFromPlan, planFetched]);
+  useEffect(() => {
+    if (ctxPatientId) setForm((f) => (f.patient_id ? f : { ...f, patient_id: ctxPatientId }));
+  }, [ctxPatientId]);
+
   const [lineItems, setLineItems] = useState<{ treatment_id: string; description: string; quantity: number; unit_price: number; line_total: number }[]>([]);
 
   const filtered = estimates.filter((e) =>
@@ -88,19 +122,27 @@ export default function EstimatesPage() {
       discount_percent: parseFloat(form.discount_percent) || 0,
       valid_until: form.valid_until,
       notes: form.notes,
+      treatment_plan_id: planId,
       line_items: lineItems,
     }, {
       onSuccess: () => {
         setCreateOpen(false);
         setForm({ patient_id: "", discount_percent: "0", valid_until: format(addDays(new Date(), 30), "yyyy-MM-dd"), notes: "" });
         setLineItems([]);
+        setPlanId(null);
       },
     });
   };
 
   return (
     <div className="space-y-6">
+      {ctxPatientId && <PatientVisitBar patientId={ctxPatientId} />}
       <PageHeader title="Treatment Estimates" description="Generate cost estimates before invoicing">
+        {ctxPatientId && planItems.some((i) => i.status !== "completed") && (
+          <Button size="sm" variant="outline" onClick={generateFromPlan}>
+            <FileText className="mr-2 h-4 w-4" /> Estimate from active plan
+          </Button>
+        )}
         <Button size="sm" className="bg-secondary hover:bg-secondary/90 shadow-lg shadow-secondary/20" onClick={() => { setCreateOpen(true); if (lineItems.length === 0) addLineItem(); }} data-tour="estimates-new">
           <Plus className="mr-2 h-4 w-4" /> New Estimate
         </Button>
