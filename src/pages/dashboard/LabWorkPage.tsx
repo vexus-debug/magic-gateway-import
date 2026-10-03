@@ -159,7 +159,7 @@ export default function LabWorkPage() {
           })}
         </motion.div>
       )}
-      <CreateLabCaseDialog open={labOpen} onOpenChange={setLabOpen} />
+      <CreateLabCaseDialog open={labOpen} onOpenChange={setLabOpen} preselectedPatientId={patientId || undefined} preselectedTooth={prefill.tooth} preselectedShade={prefill.shade} preselectedWork={prefill.work} />
     </div>
   );
 }
