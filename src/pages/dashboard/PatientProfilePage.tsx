@@ -35,6 +35,9 @@ import { OfflineDentalHistorySection } from "@/components/dashboard/OfflineDenta
 import { openPatientDocument } from "@/lib/documentUtils";
 import { printPrescription } from "@/lib/printPrescription";
 import { PatientVisitBar } from "@/components/dashboard/PatientVisitBar";
+import { useActiveVisit } from "@/hooks/useActiveVisit";
+import { useStartVisit } from "@/hooks/useVisitFlow";
+import { Grid3x3 as Grid3x3Icon, Stethoscope as StethoscopeIcon } from "lucide-react";
 
 const statusStyles: Record<string, string> = {
   paid: "bg-emerald-100 text-emerald-700",
@@ -156,6 +159,8 @@ export default function PatientProfilePage() {
   const { data: dentalEntries = [] } = useDentalChartEntries(patientId);
 
   const createNote = useCreateClinicalNote();
+  const activeVisit = useActiveVisit();
+  const startVisit = useStartVisit();
   const uploadImage = useUploadPatientImage();
   const uploadDoc = useUploadPatientDocument();
 
@@ -179,7 +184,31 @@ export default function PatientProfilePage() {
 
   return (
     <div className="space-y-6">
-      {patientId && <PatientVisitBar patientId={patientId} />}
+      {patientId && activeVisit?.patientId === patientId ? (
+        <PatientVisitBar patientId={patientId} />
+      ) : (
+        patientId && canEditClinical && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/50 bg-card px-3 py-2">
+            <p className="text-sm text-muted-foreground mr-auto">Patient in the chair?</p>
+            {terms.showDentalChart !== false && !isEyeClinic && (
+              <Button size="sm" variant="outline" className="h-8" onClick={() => navigate(`${basePath}/dental-charts?patientId=${patientId}`)}>
+                <Grid3x3Icon className="h-3.5 w-3.5 mr-1" /> Dental chart
+              </Button>
+            )}
+            <Button
+              size="sm"
+              className="h-8 bg-secondary hover:bg-secondary/90"
+              disabled={startVisit.isPending}
+              onClick={async () => {
+                await startVisit.mutateAsync({ patient_id: patientId });
+                navigate(`${basePath}/consent-forms?patientId=${patientId}&new=1`);
+              }}
+            >
+              <StethoscopeIcon className="h-3.5 w-3.5 mr-1" /> Start visit
+            </Button>
+          </div>
+        )
+      )}
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate(`${basePath}/patients`)}>
