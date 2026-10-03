@@ -14,6 +14,8 @@ import { WalkInDialog } from "@/components/dashboard/WalkInDialog";
 import { cn } from "@/lib/utils";
 import { useAppointmentsByDate, type AppointmentRow } from "@/hooks/useAppointments";
 import { PageHeader } from "@/components/dashboard/PageHeader";
+import { useAuth } from "@/hooks/useAuth";
+import { useDentists } from "@/hooks/useStaff";
 import { TableSkeleton } from "@/components/dashboard/TableSkeleton";
 import { EmptyState } from "@/components/dashboard/EmptyState";
 import { motion } from "framer-motion";
@@ -75,7 +77,7 @@ function useMonthAppointments(month: Date) {
     queryFn: async () => {
       const { data } = await supabase
         .from("appointments")
-        .select("id, appointment_date, appointment_time, status, patients(first_name, last_name), staff(full_name), treatments(name)")
+        .select("id, staff_id, appointment_date, appointment_time, status, patients(first_name, last_name), staff(full_name), treatments(name)")
         .eq("org_id", orgId!)
         .gte("appointment_date", monthStart)
         .lte("appointment_date", monthEnd)
@@ -93,11 +95,20 @@ export default function AppointmentsPage() {
   const [viewMode, setViewMode] = useState<"day" | "week" | "month">("day");
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentRow | null>(null);
 
-  const { data: appointments = [], isLoading } = useAppointmentsByDate(currentDate);
+  const { data: allAppointments = [], isLoading } = useAppointmentsByDate(currentDate);
+  const { user } = useAuth();
+  const { data: dentistList = [] } = useDentists();
+  const myStaffId = dentistList.find((d: any) => d.user_id && d.user_id === user?.id)?.id as string | undefined;
+  const [scope, setScope] = useState<"mine" | "all" | null>(null);
+  // Dentists land on their own schedule; everyone else sees all chairs.
+  const effectiveScope = scope ?? (myStaffId ? "mine" : "all");
+  const onlyMine = effectiveScope === "mine" && !!myStaffId;
+  const appointments = onlyMine ? allAppointments.filter((a) => a.staff_id === myStaffId) : allAppointments;
   const { data: waitingList = [] } = useWaitingList();
   const addToQueue = useCheckInAppointment();
   const queuedAppointmentIds = new Set(waitingList.map((w) => w.appointment_id).filter(Boolean) as string[]);
-  const { data: monthAppointments = [] } = useMonthAppointments(currentDate);
+  const { data: allMonthAppointments = [] } = useMonthAppointments(currentDate);
+  const monthAppointments = onlyMine ? allMonthAppointments.filter((a: any) => a.staff_id === myStaffId) : allMonthAppointments;
 
   const displayAppointments = appointments.map((a) => ({
     ...a,
@@ -185,6 +196,12 @@ export default function AppointmentsPage() {
           },
         }}
       >
+        {myStaffId && (
+          <div className="inline-flex rounded-md border border-border/50 p-0.5" role="group" aria-label="Whose appointments">
+            <Button size="sm" variant={onlyMine ? "secondary" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setScope("mine")}>My appointments</Button>
+            <Button size="sm" variant={!onlyMine ? "secondary" : "ghost"} className="h-7 px-2 text-xs" onClick={() => setScope("all")}>All chairs</Button>
+          </div>
+        )}
         <Button size="sm" variant="outline" onClick={() => setWalkInOpen(true)} className="border-border/50">
           <UserPlus className="mr-2 h-4 w-4" />
           Walk-In

@@ -74,6 +74,7 @@ export function useCreateEstimate() {
       valid_until?: string;
       discount_percent: number;
       notes?: string;
+      treatment_plan_id?: string | null;
       line_items: { treatment_id?: string; description: string; quantity: number; unit_price: number; line_total: number }[];
     }) => {
       const subtotal = input.line_items.reduce((s, i) => s + i.line_total, 0);
@@ -91,6 +92,7 @@ export function useCreateEstimate() {
           discount: discountAmount,
           total,
           notes: input.notes || null,
+          treatment_plan_id: input.treatment_plan_id || null,
           created_by: (await supabase.auth.getUser()).data.user?.id,
         })
         .select()
@@ -124,9 +126,12 @@ export function useUpdateEstimateStatus() {
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await (supabase as any).from("treatment_estimates").update({ status }).eq("id", id);
       if (error) throw error;
+      if (status === "accepted") await approvePlanFromEstimate(id, false);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["treatment-estimates"] });
+      qc.invalidateQueries({ queryKey: ["treatment-plans"] });
+      qc.invalidateQueries({ queryKey: ["patient-plan-items"] });
       toast({ title: "Estimate status updated" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -175,14 +180,39 @@ export function useConvertEstimateToInvoice() {
 
       // Update estimate
       await (supabase as any).from("treatment_estimates").update({ status: "converted", converted_invoice_id: invoice.id }).eq("id", estimateId);
+      await approvePlanFromEstimate(estimateId, true);
 
       return invoice;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["treatment-estimates"] });
       qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["treatment-plans"] });
+      qc.invalidateQueries({ queryKey: ["patient-plan-items"] });
       toast({ title: "Estimate converted to invoice" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
+}
+
+export const APPROVED_TAG = "[approved]";
+
+/**
+ * When a plan-based estimate is accepted, its plan items are approved and
+ * scheduled; when converted to an invoice they're also tagged invoiced so the
+ * visit hand-off doesn't bill them twice.
+ */
+async function approvePlanFromEstimate(estimateId: string, invoiced: boolean) {
+  const db = supabase as any;
+  const { data: est } = await db.from("treatment_estimates").select("treatment_plan_id").eq("id", estimateId).maybeSingle();
+  if (!est?.treatment_plan_id) return;
+  const { data: items } = await db.from("treatment_plan_items").select("id, notes, scheduled_date, status").eq("plan_id", est.treatment_plan_id);
+  const today = new Date().toISOString().split("T")[0];
+  for (const i of items || []) {
+    if (i.status === "skipped") continue;
+    let notes: string = i.notes || "";
+    if (!notes.includes(APPROVED_TAG)) notes = `${notes ? notes + " " : ""}${APPROVED_TAG} ${today}`;
+    if (invoiced && !notes.includes("[invoiced]")) notes = `${notes} [invoiced] ${today}`;
+    await db.from("treatment_plan_items").update({ notes, scheduled_date: i.scheduled_date || today }).eq("id", i.id);
+  }
 }

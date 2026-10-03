@@ -4,7 +4,7 @@ import { setActiveVisit } from "@/hooks/useActiveVisit";
 import { Button } from "@/components/ui/button";
 import { User, Grid3x3, ClipboardList, Pill, FileSignature, NotebookPen, CheckCircle2, X, FlaskConical, Calculator, ArrowRight } from "lucide-react";
 import { usePatients } from "@/hooks/usePatients";
-import { useClinicLinks } from "@/hooks/usePatientContext";
+import { useClinicLinks, usePatientContext } from "@/hooks/usePatientContext";
 import { useClinicTerms } from "@/hooks/useClinicTerms";
 import { VisitCompletionDialog } from "@/components/dashboard/VisitCompletionDialog";
 import { cn } from "@/lib/utils";
@@ -91,4 +91,10 @@ export function PatientVisitBar({ patientId, onClear }: { patientId: string; onC
       <VisitCompletionDialog open={finishOpen} onOpenChange={setFinishOpen} patientId={patientId} patientName={name} />
     </>
   );
+}
+
+/** Visit bar for pages that don't select a patient themselves (lists, settings). */
+export function ActiveVisitBar() {
+  const { patientId } = usePatientContext();
+  return patientId ? <PatientVisitBar patientId={patientId} /> : null;
 }

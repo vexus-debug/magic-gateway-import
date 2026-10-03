@@ -5213,6 +5213,7 @@ export type Database = {
           status: string
           subtotal: number
           total: number
+          treatment_plan_id: string | null
           updated_at: string
           valid_until: string | null
         }
@@ -5230,6 +5231,7 @@ export type Database = {
           status?: string
           subtotal?: number
           total?: number
+          treatment_plan_id?: string | null
           updated_at?: string
           valid_until?: string | null
         }
@@ -5247,6 +5249,7 @@ export type Database = {
           status?: string
           subtotal?: number
           total?: number
+          treatment_plan_id?: string | null
           updated_at?: string
           valid_until?: string | null
         }
@@ -5270,6 +5273,13 @@ export type Database = {
             columns: ["patient_id"]
             isOneToOne: false
             referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "treatment_estimates_treatment_plan_id_fkey"
+            columns: ["treatment_plan_id"]
+            isOneToOne: false
+            referencedRelation: "treatment_plans"
             referencedColumns: ["id"]
           },
         ]
