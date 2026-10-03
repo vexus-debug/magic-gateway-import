@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { setActiveVisit } from "@/hooks/useActiveVisit";
 import { Button } from "@/components/ui/button";
-import { User, Grid3x3, ClipboardList, Pill, FileSignature, NotebookPen, CheckCircle2, X } from "lucide-react";
+import { User, Grid3x3, ClipboardList, Pill, FileSignature, NotebookPen, CheckCircle2, X, FlaskConical, Calculator, ArrowRight } from "lucide-react";
 import { usePatients } from "@/hooks/usePatients";
 import { useClinicLinks } from "@/hooks/usePatientContext";
 import { useClinicTerms } from "@/hooks/useClinicTerms";
@@ -18,6 +19,14 @@ export function PatientVisitBar({ patientId, onClear }: { patientId: string; onC
   const terms = useClinicTerms();
   const { pathname } = useLocation();
   const [finishOpen, setFinishOpen] = useState(false);
+  const navigate = useNavigate();
+  const [, setSearchParams] = useSearchParams();
+  const clear = onClear
+    ? () => { setActiveVisit(null); onClear(); }
+    : () => {
+        setActiveVisit(null);
+        setSearchParams((prev) => { const n = new URLSearchParams(prev); n.delete("patientId"); return n; }, { replace: true });
+      };
   const patient = patients.find((p: any) => p.id === patientId);
   const name = patient ? `${patient.first_name} ${patient.last_name}` : "Patient";
 
@@ -26,8 +35,15 @@ export function PatientVisitBar({ patientId, onClear }: { patientId: string; onC
     terms.showDentalChart ? { page: "dental-charts", label: "Chart", icon: Grid3x3 } : null,
     { page: "treatments", label: "Plan", icon: ClipboardList, extra: { tab: "plans" } },
     { page: "prescriptions", label: "Rx", icon: Pill, extra: { new: "1" } },
+    { page: "lab-work", label: "Lab", icon: FlaskConical, extra: { new: "1" } },
+    { page: "estimates", label: "Estimate", icon: Calculator, extra: { fromPlan: "1" } },
     { page: "patient", label: "Notes", icon: NotebookPen },
   ].filter(Boolean) as { page: string; label: string; icon: any; extra?: Record<string, string> }[];
+
+  // Guided flow: Consent → Chart → Plan → Rx, then Finish.
+  const flow = items.filter((i) => ["consent-forms", "dental-charts", "treatments", "prescriptions"].includes(i.page));
+  const idx = flow.findIndex((i) => pathname.endsWith(`/${i.page}`));
+  const next = idx >= 0 ? flow[idx + 1] : null;
 
   return (
     <>
@@ -54,14 +70,22 @@ export function PatientVisitBar({ patientId, onClear }: { patientId: string; onC
               </Button>
             );
           })}
+          {idx >= 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 px-2 text-xs border-secondary/40"
+              onClick={() => (next ? navigate(link(next.page, patientId, next.page === "treatments" ? { tab: "plans" } : undefined)) : setFinishOpen(true))}
+            >
+              {next ? `Next: ${next.label}` : "Next: Finish"} <ArrowRight className="h-3.5 w-3.5 ml-1" />
+            </Button>
+          )}
           <Button size="sm" className="h-8 px-2 text-xs bg-secondary hover:bg-secondary/90" onClick={() => setFinishOpen(true)}>
             <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Finish
           </Button>
-          {onClear && (
-            <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Clear patient" onClick={onClear}>
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          )}
+          <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="End visit context" onClick={clear}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
       <VisitCompletionDialog open={finishOpen} onOpenChange={setFinishOpen} patientId={patientId} patientName={name} />
