@@ -77,7 +77,7 @@ function useMonthAppointments(month: Date) {
     queryFn: async () => {
       const { data } = await supabase
         .from("appointments")
-        .select("id, appointment_date, appointment_time, status, patients(first_name, last_name), staff(full_name), treatments(name)")
+        .select("id, staff_id, appointment_date, appointment_time, status, patients(first_name, last_name), staff(full_name), treatments(name)")
         .eq("org_id", orgId!)
         .gte("appointment_date", monthStart)
         .lte("appointment_date", monthEnd)
