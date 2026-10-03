@@ -14,3 +14,17 @@
 - [x] Waiting list shortcuts to Chart/Plan/Notes, plus checkout after Done.
 - [x] Chart findings can be added to the treatment plan with the catalog price.
 - [x] Finish-visit panel: review billables, attach prescriptions, send to billing, book the next visit.
+
+## Dentist flow fixes
+- [x] Visit context persists across sidebar navigation
+- [x] Start visit syncs appointment + waiting list; Done syncs back
+- [x] Finish visit: closes queue, logs extra materials; plan item completion deducts stock
+- [x] Consent: auto template + "proceed" prompt
+- [ ] Global visit bar on lab/estimates/materials/patients
+- [ ] Profile: Start Visit + Dental chart link
+- [ ] Appointments: My schedule filter; booking conflict warning
+- [ ] Chart: plan status markers, surface/material
+- [ ] Treatments: bulk add; plan -> estimate; estimate accept updates plan
+- [ ] Prescriptions: presets + diagnosis prefill
+- [ ] Lab case from visit with prefill
+- [ ] Visit stepper "Next step"
