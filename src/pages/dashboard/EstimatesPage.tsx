@@ -54,10 +54,11 @@ export default function EstimatesPage() {
     valid_until: format(addDays(new Date(), 30), "yyyy-MM-dd"),
     notes: "",
   });
-  const { patientId: ctxPatientId, consumeFlag } = usePatientContext();
+  const { patientId: ctxPatientId, consumeFlag, searchParams } = usePatientContext();
   const { data: planItems = [], isFetched: planFetched } = usePatientPlanItems(ctxPatientId || null);
   const [planId, setPlanId] = useState<string | null>(null);
-  const [wantFromPlan] = useState(() => consumeFlag("fromPlan"));
+  const [wantFromPlan] = useState(() => searchParams.get("fromPlan") === "1");
+  useEffect(() => { consumeFlag("fromPlan"); }, [consumeFlag]);
 
   /** Builds an estimate from the patient's open treatment plan in one click. */
   const generateFromPlan = () => {
