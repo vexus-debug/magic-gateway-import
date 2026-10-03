@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { usePatientContext } from "@/hooks/usePatientContext";
+import { PatientVisitBar } from "@/components/dashboard/PatientVisitBar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, FlaskConical, MessageCircle, Mail, Share2 } from "lucide-react";
@@ -31,12 +33,16 @@ const stagger = {
 
 export default function LabWorkPage() {
   const [labOpen, setLabOpen] = useState(false);
+  const { patientId, searchParams, consumeFlag } = usePatientContext();
+  const [prefill] = useState(() => ({ tooth: searchParams.get("tooth") || undefined, shade: searchParams.get("shade") || undefined, work: searchParams.get("work") || undefined }));
+  useEffect(() => { if (consumeFlag("new")) setLabOpen(true); }, [consumeFlag]);
   const { data: labOrders = [], isLoading } = useLabOrders();
 
   const statuses = ["pending", "sent", "in-progress", "completed"] as const;
 
   return (
     <div className="space-y-6">
+      {patientId && <PatientVisitBar patientId={patientId} />}
       <PageHeader
         title="Lab Work"
         description="Track dental lab orders and results"
@@ -153,7 +159,7 @@ export default function LabWorkPage() {
           })}
         </motion.div>
       )}
-      <CreateLabCaseDialog open={labOpen} onOpenChange={setLabOpen} />
+      <CreateLabCaseDialog open={labOpen} onOpenChange={setLabOpen} preselectedPatientId={patientId || undefined} preselectedTooth={prefill.tooth} preselectedShade={prefill.shade} preselectedWork={prefill.work} />
     </div>
   );
 }

@@ -24,6 +24,7 @@ import { usePatients } from "@/hooks/usePatients";
 import { useDentists } from "@/hooks/useStaff";
 import { useCreateLabCase } from "@/hooks/useLabCases";
 import { useClinicTerms } from "@/hooks/useClinicTerms";
+import { useAuth } from "@/hooks/useAuth";
 
 const JOB_INSTRUCTION_OPTIONS = [
   "Courier Charge",
@@ -86,6 +87,10 @@ interface CreateLabCaseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   preselectedPatientId?: string;
+  /** Carried over from the chart/plan so the lab ticket isn't re-typed. */
+  preselectedTooth?: string;
+  preselectedShade?: string;
+  preselectedWork?: string;
 }
 
 const emptyValues = (patientId?: string): LabCaseFormValues => ({
@@ -110,7 +115,8 @@ const emptyValues = (patientId?: string): LabCaseFormValues => ({
   instructions: "",
 });
 
-export function CreateLabCaseDialog({ open, onOpenChange, preselectedPatientId }: CreateLabCaseDialogProps) {
+export function CreateLabCaseDialog({ open, onOpenChange, preselectedPatientId, preselectedTooth, preselectedShade, preselectedWork }: CreateLabCaseDialogProps) {
+  const { user } = useAuth();
   const terms = useClinicTerms();
   const { data: patients = [] } = usePatients();
   const { data: dentists = [] } = useDentists();
@@ -127,10 +133,18 @@ export function CreateLabCaseDialog({ open, onOpenChange, preselectedPatientId }
   // Carry the patient chosen elsewhere (e.g. their own page) into this form
   useEffect(() => {
     if (!open) return;
-    form.reset(emptyValues(preselectedPatientId));
-    setShowMore(false);
+    const v = emptyValues(preselectedPatientId);
+    // The signed-in dentist is the clinician by default.
+    const me = dentists.find((d: any) => d.user_id && d.user_id === user?.id);
+    if (me) v.dentistId = me.id;
+    if (preselectedTooth) v.jobDescription = `Tooth #${preselectedTooth}${preselectedWork ? ` — ${preselectedWork}` : ""}`;
+    if (preselectedShade) v.shade = preselectedShade;
+    const known = (JOB_INSTRUCTION_OPTIONS as readonly string[]).find((j) => preselectedWork && j.toLowerCase().includes(preselectedWork.toLowerCase().split(" ")[0]));
+    if (known) v.jobInstructions = [known];
+    form.reset(v);
+    setShowMore(!!(preselectedTooth || preselectedShade));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, preselectedPatientId]);
+  }, [open, preselectedPatientId, preselectedTooth, preselectedShade, dentists.length]);
 
   function onSubmit(data: LabCaseFormValues) {
     const workType = data.jobInstructions.join(", ");
