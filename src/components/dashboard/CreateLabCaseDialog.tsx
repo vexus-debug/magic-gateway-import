@@ -24,6 +24,7 @@ import { usePatients } from "@/hooks/usePatients";
 import { useDentists } from "@/hooks/useStaff";
 import { useCreateLabCase } from "@/hooks/useLabCases";
 import { useClinicTerms } from "@/hooks/useClinicTerms";
+import { useAuth } from "@/hooks/useAuth";
 
 const JOB_INSTRUCTION_OPTIONS = [
   "Courier Charge",
@@ -138,7 +139,7 @@ export function CreateLabCaseDialog({ open, onOpenChange, preselectedPatientId, 
     if (me) v.dentistId = me.id;
     if (preselectedTooth) v.jobDescription = `Tooth #${preselectedTooth}${preselectedWork ? ` — ${preselectedWork}` : ""}`;
     if (preselectedShade) v.shade = preselectedShade;
-    const known = JOB_TYPES_FOR_PREFILL.find((j) => preselectedWork && j.toLowerCase().includes(preselectedWork.toLowerCase().split(" ")[0]));
+    const known = (JOB_INSTRUCTION_OPTIONS as readonly string[]).find((j) => preselectedWork && j.toLowerCase().includes(preselectedWork.toLowerCase().split(" ")[0]));
     if (known) v.jobInstructions = [known];
     form.reset(v);
     setShowMore(!!(preselectedTooth || preselectedShade));
