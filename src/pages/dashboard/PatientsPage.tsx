@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ActiveVisitBar } from "@/components/dashboard/PatientVisitBar";
 import { useNavigate } from "react-router-dom";
 import { useOrg } from "@/hooks/useOrg";
 import { getClinicTerms } from "@/config/clinicTerminology";
@@ -64,6 +65,7 @@ export default function PatientsPage() {
 
   return (
     <div className="space-y-5">
+      <ActiveVisitBar />
       <PageHeader
         title="Patients"
         description={`${patients.length} total · ${activeCount} active`}

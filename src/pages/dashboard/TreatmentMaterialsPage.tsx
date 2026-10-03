@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ActiveVisitBar } from "@/components/dashboard/PatientVisitBar";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,7 @@ export default function TreatmentMaterialsPage() {
 
   return (
     <div className="space-y-6">
+      <ActiveVisitBar />
       <SupplyNav />
       <PageHeader title="Treatment Materials" description="What each treatment uses, what it costs, and automatic stock deduction">
         <Button data-tour="treatment-materials-add" size="sm" className="bg-secondary hover:bg-secondary/90 shadow-lg shadow-secondary/20" onClick={() => openAdd()}>
